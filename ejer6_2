@@ -1,0 +1,191 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import pygame
+import os
+
+# --- Classes from previous exercise ---
+class Caja:
+    def __init__(self, codigo, peso_kg, descripcion_carga, largo, ancho, altura):
+        self.codigo = codigo
+        self.peso_kg = float(peso_kg)
+        self.descripcion_carga = descripcion_carga
+        self.largo = float(largo)
+        self.ancho = float(ancho)
+        self.altura = float(altura)
+
+    def __str__(self):
+        return (f"Caja {self.codigo}: {self.descripcion_carga}, Peso: {self.peso_kg} kg, "
+                f"Dimensiones: {self.largo}x{self.ancho}x{self.altura} m")
+
+class Camion:
+    def __init__(self, matricula, conductor, capacidad_kg, descripcion_carga, rumbo, velocidad):
+        self.matricula = matricula
+        self.conductor = conductor
+        self.capacidad_kg = float(capacidad_kg)
+        self.descripcion_carga = descripcion_carga
+        self.rumbo = int(rumbo)
+        self.velocidad = int(velocidad)
+        self.cajas = []
+        self.x = 100
+        self.y = 100
+
+    def peso_total(self):
+        return sum(c.peso_kg for c in self.cajas)
+
+    def add_caja(self, caja):
+        if self.peso_total() + caja.peso_kg <= self.capacidad_kg:
+            self.cajas.append(caja)
+        else:
+            raise ValueError("La caja supera la capacidad máxima del camión.")
+
+    def setVelocidad(self, v):
+        self.velocidad = v
+
+    def setRumbo(self, r):
+        if 1 <= r <= 359:
+            self.rumbo = r
+
+    def claxon(self):
+        print("piiiiiii")()
+
+    def mover(self):
+        import math
+        rad = math.radians(self.rumbo)
+        self.x += math.cos(rad) * (self.velocidad / 10)
+        self.y -= math.sin(rad) * (self.velocidad / 10)
+
+    def __str__(self):
+        info = (f"Camión {self.matricula}\nConductor: {self.conductor}\nCapacidad: {self.capacidad_kg} kg\n"
+                f"Rumbo: {self.rumbo}°\nVelocidad: {self.velocidad} km/h\n"
+                f"Cajas: {len(self.cajas)} (Peso total: {self.peso_total()} kg)\n")
+        for c in self.cajas:
+            info += " - " + str(c) + "\n"
+        return info
+
+# --- Tkinter Application ---
+class App:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Gestión de Camiones")
+
+        pygame.mixer.init()
+        ruta_audio = os.path.join(os.path.dirname(__file__), "claxon.mp3")
+        self.sonido_claxon = pygame.mixer.Sound(ruta_audio)  # Asegúrate de colocar claxon.wav junto al script()
+
+        self.camiones = []
+        self.camion_activo = None
+
+        self.canvas = tk.Canvas(root, width=600, height=400, bg="white")
+        self.canvas.grid(row=0, column=0, padx=10, pady=10)
+
+        control_frame = tk.Frame(root)
+        control_frame.grid(row=0, column=1, sticky="n")
+
+        tk.Label(control_frame, text="Camión activo:").pack()
+        self.selector = ttk.Combobox(control_frame, state="readonly", values=[])
+        self.selector.pack()
+        self.selector.bind("<<ComboboxSelected>>", self.seleccionar_camion)
+
+        tk.Button(control_frame, text="Crear camión", command=self.crear_camion_popup).pack(pady=5)
+        tk.Button(control_frame, text="Añadir caja", command=self.crear_caja_popup).pack(pady=5)
+
+        tk.Button(control_frame, text="Tocar claxon", command=self.tocar_claxon).pack(pady=5)
+
+        tk.Label(control_frame, text="Velocidad:").pack()
+        self.velocidad_scale = tk.Scale(control_frame, from_=0, to=150, orient="horizontal", command=self.cambiar_velocidad)
+        self.velocidad_scale.pack()
+
+        tk.Label(control_frame, text="Rumbo:").pack()
+        self.rumbo_scale = tk.Scale(control_frame, from_=1, to=359, orient="horizontal", command=self.cambiar_rumbo)
+        self.rumbo_scale.pack()
+
+        tk.Button(control_frame, text="Mostrar información", command=self.mostrar_info).pack(pady=5)
+
+        self.animar()
+
+    def seleccionar_camion(self, event=None):
+        idx = self.selector.current()
+        self.camion_activo = self.camiones[idx]
+
+    def crear_camion_popup(self):
+        win = tk.Toplevel(self.root)
+        win.title("Nuevo camión")
+
+        entries = {}
+        labels = ["Matrícula", "Conductor", "Capacidad kg", "Descripción", "Rumbo", "Velocidad"]
+        for l in labels:
+            tk.Label(win, text=l).pack()
+            e = tk.Entry(win)
+            e.pack()
+            entries[l] = e
+
+        def crear():
+            try:
+                c = Camion(entries["Matrícula"].get(), entries["Conductor"].get(),
+                           float(entries["Capacidad kg"].get()), entries["Descripción"].get(),
+                           int(entries["Rumbo"].get()), int(entries["Velocidad"].get()))
+                self.camiones.append(c)
+                self.selector["values"] = [cam.matricula for cam in self.camiones]
+                win.destroy()
+            except:
+                messagebox.showerror("Error", "Datos inválidos")
+
+        tk.Button(win, text="Crear", command=crear).pack(pady=5)
+
+    def crear_caja_popup(self):
+        if not self.camion_activo:
+            messagebox.showwarning("Aviso", "Selecciona un camión primero")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("Nueva caja")
+
+        entries = {}
+        labels = ["Código", "Peso kg", "Descripción", "Largo", "Ancho", "Altura"]
+        for l in labels:
+            tk.Label(win, text=l).pack()
+            e = tk.Entry(win)
+            e.pack()
+            entries[l] = e
+
+        def crear():
+            try:
+                caja = Caja(entries["Código"].get(), float(entries["Peso kg"].get()),
+                            entries["Descripción"].get(), float(entries["Largo"].get()),
+                            float(entries["Ancho"].get()), float(entries["Altura"].get()))
+                self.camion_activo.add_caja(caja)
+                win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
+
+        tk.Button(win, text="Crear", command=crear).pack(pady=5)
+
+    def tocar_claxon(self):
+        if self.camion_activo:
+            self.sonido_claxon.play()
+
+    def cambiar_velocidad(self, val):
+        if self.camion_activo:
+            self.camion_activo.setVelocidad(int(val))
+
+    def cambiar_rumbo(self, val):
+        if self.camion_activo:
+            self.camion_activo.setRumbo(int(val))
+
+    def mostrar_info(self):
+        if self.camion_activo:
+            messagebox.showinfo("Información del camión", str(self.camion_activo))
+
+    def animar(self):
+        self.canvas.delete("all")
+        for cam in self.camiones:
+            cam.mover()
+            self.canvas.create_rectangle(cam.x, cam.y, cam.x + 40, cam.y + 20, fill="blue")
+            self.canvas.create_text(cam.x + 20, cam.y - 10, text=cam.matricula)
+        self.root.after(50, self.animar)
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    App(root)
+    root.mainloop()
